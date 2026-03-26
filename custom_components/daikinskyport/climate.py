@@ -1,5 +1,6 @@
 """Support for Daikin Skyport Thermostats."""
 import collections
+import time
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -442,6 +443,24 @@ class Thermostat(ClimateEntity):
                               }
         self._fan_modes = [FAN_AUTO, FAN_ON, FAN_LOW, FAN_MEDIUM, FAN_HIGH, FAN_SCHEDULE]
         self.update_without_throttle = False
+        self._optimistic_timestamps = {}
+        self._grace_period = 30  # seconds to hold optimistic values
+
+    def _mark_optimistic(self, *attrs):
+        """Mark attributes as recently set locally."""
+        now = time.monotonic()
+        for attr in attrs:
+            self._optimistic_timestamps[attr] = now
+
+    def _in_grace_period(self, attr):
+        """Check if attribute was recently set locally and should not be overwritten."""
+        ts = self._optimistic_timestamps.get(attr)
+        if ts is None:
+            return False
+        if time.monotonic() - ts < self._grace_period:
+            return True
+        del self._optimistic_timestamps[attr]
+        return False
 
     async def async_update(self):
         """Get the latest state from the thermostat."""
@@ -452,23 +471,33 @@ class Thermostat(ClimateEntity):
             await self.data._async_update_data()
 
         self.thermostat = self.data.daikinskyport.get_thermostat(self.thermostat_index)
-        self._cool_setpoint = self.thermostat["cspActive"]
-        self._heat_setpoint = self.thermostat["hspActive"]
-        self._attr_target_humidity = self.thermostat.get("humSP")
-        self._hvac_mode = DAIKIN_HVAC_TO_HASS[self.thermostat["mode"]]
-        if DAIKIN_FAN_TO_HASS[self.thermostat["fanCirculate"]] == FAN_ON:
-            self._fan_mode = DAIKIN_FAN_TO_HASS[self.thermostat["fanCirculateSpeed"] + 3]
-        else:
-            self._fan_mode = DAIKIN_FAN_TO_HASS[self.thermostat["fanCirculate"]]
-        self._fan_speed = DAIKIN_FAN_SPEED_TO_HASS[self.thermostat["fanCirculateSpeed"]]
-        if self.thermostat["geofencingAway"]:
-            self._preset_mode = PRESET_AWAY
-        elif self.thermostat["schedOverride"] == 1:
-            self._preset_mode = PRESET_TEMP_HOLD
-        elif self.thermostat["schedEnabled"]:
-            self._preset_mode = PRESET_SCHEDULE
-        else:
-            self._preset_mode = PRESET_MANUAL
+
+        if not self._in_grace_period("temperature"):
+            self._cool_setpoint = self.thermostat["cspActive"]
+            self._heat_setpoint = self.thermostat["hspActive"]
+
+        if not self._in_grace_period("humidity"):
+            self._attr_target_humidity = self.thermostat.get("humSP")
+
+        if not self._in_grace_period("hvac_mode"):
+            self._hvac_mode = DAIKIN_HVAC_TO_HASS[self.thermostat["mode"]]
+
+        if not self._in_grace_period("fan"):
+            if DAIKIN_FAN_TO_HASS[self.thermostat["fanCirculate"]] == FAN_ON:
+                self._fan_mode = DAIKIN_FAN_TO_HASS[self.thermostat["fanCirculateSpeed"] + 3]
+            else:
+                self._fan_mode = DAIKIN_FAN_TO_HASS[self.thermostat["fanCirculate"]]
+            self._fan_speed = DAIKIN_FAN_SPEED_TO_HASS[self.thermostat["fanCirculateSpeed"]]
+
+        if not self._in_grace_period("preset"):
+            if self.thermostat["geofencingAway"]:
+                self._preset_mode = PRESET_AWAY
+            elif self.thermostat["schedOverride"] == 1:
+                self._preset_mode = PRESET_TEMP_HOLD
+            elif self.thermostat["schedEnabled"]:
+                self._preset_mode = PRESET_SCHEDULE
+            else:
+                self._preset_mode = PRESET_MANUAL
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -658,7 +687,8 @@ class Thermostat(ClimateEntity):
             return
         
         self._preset_mode = preset_mode
-
+        self._mark_optimistic("preset")
+        self.update_without_throttle = True
         self.schedule_update_ha_state(False)
 
     @property
@@ -703,6 +733,8 @@ class Thermostat(ClimateEntity):
             isinstance(cool_temp, (int, float)),
         )
 
+        self._mark_optimistic("temperature")
+        self.update_without_throttle = True
         self.schedule_update_ha_state(False)
 
     def set_fan_mode(self, fan_mode):
@@ -714,6 +746,8 @@ class Thermostat(ClimateEntity):
             )
             
             self._fan_mode = fan_mode
+            self._mark_optimistic("fan")
+            self.update_without_throttle = True
             self.schedule_update_ha_state(False)
 
             _LOGGER.debug("Setting fan mode to: %s", fan_mode)
@@ -735,6 +769,8 @@ class Thermostat(ClimateEntity):
             )
 
             self._fan_speed = FAN_TO_DAIKIN_FAN[fan_mode]
+            self._mark_optimistic("fan")
+            self.update_without_throttle = True
             self.schedule_update_ha_state(False)
 
             _LOGGER.debug("Setting fan speed to: %s", self._fan_speed)
@@ -774,6 +810,8 @@ class Thermostat(ClimateEntity):
         """Set the humidity level."""
         self.data.daikinskyport.set_humidity(self.thermostat_index, humidity)
         self._attr_target_humidity = humidity
+        self._mark_optimistic("humidity")
+        self.update_without_throttle = True
         self.schedule_update_ha_state(False)
 
     def set_hvac_mode(self, hvac_mode):
@@ -786,6 +824,8 @@ class Thermostat(ClimateEntity):
             return
         self.data.daikinskyport.set_hvac_mode(self.thermostat_index, daikin_value)
         self._hvac_mode = hvac_mode
+        self._mark_optimistic("hvac_mode")
+        self.update_without_throttle = True
         self.schedule_update_ha_state(False)
 
     def resume_program(self):
@@ -793,6 +833,8 @@ class Thermostat(ClimateEntity):
         self.data.daikinskyport.resume_program(
             self.thermostat_index
         )
+        self._mark_optimistic("preset")
+        self.update_without_throttle = True
         self.schedule_update_ha_state(False)
 
     def set_fan_schedule(self, start=None, stop=None, interval=None, speed=None):
@@ -806,6 +848,7 @@ class Thermostat(ClimateEntity):
         self.data.daikinskyport.set_fan_schedule(
             self.thermostat_index, start, stop, interval, speed
         )
+        self.update_without_throttle = True
         self.schedule_update_ha_state(False)
 
     def set_night_mode(self, start=None, stop=None, enable=None):
@@ -819,6 +862,7 @@ class Thermostat(ClimateEntity):
         self.data.daikinskyport.set_night_mode(
             self.thermostat_index, start, stop, enable
         )
+        self.update_without_throttle = True
         self.schedule_update_ha_state(False)
 
     def set_thermostat_schedule(self, day=None, start=None, part=None, enable=None, label=None, heating=None, cooling=None):
@@ -847,6 +891,7 @@ class Thermostat(ClimateEntity):
         self.data.daikinskyport.set_thermostat_schedule(
             self.thermostat_index, prefix, start, enable, label, heating, cooling
         )
+        self.update_without_throttle = True
         self.schedule_update_ha_state(False)
 
     def set_oneclean(self, enable):
@@ -854,6 +899,7 @@ class Thermostat(ClimateEntity):
         self.data.daikinskyport.set_fan_clean(
             self.thermostat_index, enable
         )
+        self.update_without_throttle = True
         self.schedule_update_ha_state(False)
 
     def set_efficiency(self, enable):
@@ -861,6 +907,7 @@ class Thermostat(ClimateEntity):
         self.data.daikinskyport.set_dual_fuel_efficiency(
             self.thermostat_index, enable
         )
+        self.update_without_throttle = True
         self.schedule_update_ha_state(False)
 
     def hold_preference(self):
