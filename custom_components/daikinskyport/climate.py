@@ -660,7 +660,7 @@ class Thermostat(ClimateEntity):
         self._preset_mode = preset_mode
 
         self.update_without_throttle = True
-        self.async_write_ha_state()
+        self.schedule_update_ha_state(False)
 
     @property
     def preset_modes(self):
@@ -705,7 +705,7 @@ class Thermostat(ClimateEntity):
         )
 
         self.update_without_throttle = True
-        self.async_write_ha_state()
+        self.schedule_update_ha_state(False)
 
     def set_fan_mode(self, fan_mode):
         """Set the fan mode.  Valid values are "on", "auto", or "schedule"."""
@@ -717,7 +717,7 @@ class Thermostat(ClimateEntity):
             
             self._fan_mode = fan_mode
             self.update_without_throttle = True
-            self.async_write_ha_state()
+            self.schedule_update_ha_state(False)
 
             _LOGGER.debug("Setting fan mode to: %s", fan_mode)
         elif fan_mode in {FAN_LOW, FAN_MEDIUM, FAN_HIGH}:
@@ -739,7 +739,7 @@ class Thermostat(ClimateEntity):
 
             self._fan_speed = FAN_TO_DAIKIN_FAN[fan_mode]
             self.update_without_throttle = True
-            self.async_write_ha_state()
+            self.schedule_update_ha_state(False)
 
             _LOGGER.debug("Setting fan speed to: %s", self._fan_speed)
         else:
@@ -779,7 +779,7 @@ class Thermostat(ClimateEntity):
         self.data.daikinskyport.set_humidity(self.thermostat_index, humidity)
         self._attr_target_humidity = humidity
         self.update_without_throttle = True
-        self.async_write_ha_state()
+        self.schedule_update_ha_state(False)
 
     def set_hvac_mode(self, hvac_mode):
         """Set HVAC mode (auto, auxHeatOnly, cool, heat, off)."""
@@ -792,7 +792,7 @@ class Thermostat(ClimateEntity):
         self.data.daikinskyport.set_hvac_mode(self.thermostat_index, daikin_value)
         self._hvac_mode = hvac_mode
         self.update_without_throttle = True
-        self.async_write_ha_state()
+        self.schedule_update_ha_state(False)
 
     def resume_program(self):
         """Resume the thermostat schedule program."""
@@ -800,7 +800,7 @@ class Thermostat(ClimateEntity):
             self.thermostat_index
         )
         self.update_without_throttle = True
-        self.async_write_ha_state()
+        self.schedule_update_ha_state(False)
 
     def set_fan_schedule(self, start=None, stop=None, interval=None, speed=None):
         """Set the thermostat fan schedule."""
@@ -814,7 +814,7 @@ class Thermostat(ClimateEntity):
             self.thermostat_index, start, stop, interval, speed
         )
         self.update_without_throttle = True
-        self.async_write_ha_state()
+        self.schedule_update_ha_state(False)
 
     def set_night_mode(self, start=None, stop=None, enable=None):
         """Set the thermostat night mode."""
@@ -828,7 +828,7 @@ class Thermostat(ClimateEntity):
             self.thermostat_index, start, stop, enable
         )
         self.update_without_throttle = True
-        self.async_write_ha_state()
+        self.schedule_update_ha_state(False)
 
     def set_thermostat_schedule(self, day=None, start=None, part=None, enable=None, label=None, heating=None, cooling=None):
         """Set the thermostat schedule."""
@@ -857,7 +857,7 @@ class Thermostat(ClimateEntity):
             self.thermostat_index, prefix, start, enable, label, heating, cooling
         )
         self.update_without_throttle = True
-        self.async_write_ha_state()
+        self.schedule_update_ha_state(False)
 
     def set_oneclean(self, enable):
         """Enable/disable OneClean."""
@@ -865,7 +865,7 @@ class Thermostat(ClimateEntity):
             self.thermostat_index, enable
         )
         self.update_without_throttle = True
-        self.async_write_ha_state()
+        self.schedule_update_ha_state(False)
 
     def set_efficiency(self, enable):
         """Enable/disable heat pump efficiency."""
@@ -873,7 +873,7 @@ class Thermostat(ClimateEntity):
             self.thermostat_index, enable
         )
         self.update_without_throttle = True
-        self.async_write_ha_state()
+        self.schedule_update_ha_state(False)
 
     def hold_preference(self):
         """Return user preference setting for hold time."""
