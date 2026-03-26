@@ -1,6 +1,6 @@
 """Support for Daikin Skyport Thermostats."""
 import collections
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 import voluptuous as vol
@@ -51,6 +51,8 @@ from .const import (
     DAIKIN_HVAC_MODE_AUXHEAT,
     COORDINATOR,
 )
+
+SCAN_INTERVAL = timedelta(seconds=5)
 
 WEEKDAY = [ "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
