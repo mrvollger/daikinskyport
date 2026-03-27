@@ -271,7 +271,7 @@ class DaikinSkyport(object):
         if thermostat['equipmentStatus'] == 5:
             sensors.append({"name": f"{name} Indoor", "value": 0, "type": "power"})
         elif "ctIndoorPower" in thermostat:
-            sensors.append({"name": f"{name} Indoor", "value": thermostat['ctIndoorPower'], "type": "power"})
+            sensors.append({"name": f"{name} Indoor", "value": thermostat['ctIndoorPower'] / 10, "type": "power"})
 
 
         if self.thermostats[index]['aqOutdoorAvailable']:
